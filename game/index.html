@@ -2,18 +2,107 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Block Dodger</title>
-<style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #11141b; }
-  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
-  /* Read aloud, never shown: the status line screen readers announce. */
-  #status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-</style>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Vesper Bay — Golden Hustle</title>
+<link rel="stylesheet" href="./style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.min.js"
+  }
+}
+</script>
 </head>
 <body>
-<canvas id="game" aria-label="Block Dodger: move the paddle left and right to dodge falling blocks and catch coins"></canvas>
-<p id="status" role="status" aria-live="polite"></p>
+<div id="app">
+  <canvas id="view"></canvas>
+  <div id="vignette"></div>
+
+  <div id="hud" class="hidden">
+    <div id="topLeft" class="panel">
+      <div class="hud-row"><span id="wantedStars" class="stars">☆☆☆☆☆</span><span id="wantedLabel">CLEAN</span></div>
+      <div class="meter"><div id="healthFill" class="meter-fill health"></div><span class="meter-text">HP <b id="healthText">100</b></span></div>
+      <div class="meter"><div id="armorFill" class="meter-fill armor"></div><span class="meter-text">AR <b id="armorText">0</b></span></div>
+      <div class="hud-row money-row"><span class="coin">◈</span><span id="cashText">$0</span><span id="respectText" class="respect">RESPECT 0</span></div>
+    </div>
+
+    <div id="topRight" class="panel">
+      <div class="panel-kicker">CURRENT JOB</div>
+      <div id="missionTitle">—</div>
+      <div id="missionObjective">Explore Vesper Bay</div>
+      <div id="missionDistance"></div>
+    </div>
+
+    <div id="minimapWrap">
+      <canvas id="minimap" width="224" height="224"></canvas>
+      <div id="mapCaption">VESPER BAY // LIVE MAP</div>
+    </div>
+
+    <div id="bottomLeft" class="panel">
+      <div id="vehicleName">ON FOOT</div>
+      <div class="speedo"><span id="speedText">0</span><small>MPH</small></div>
+      <div class="gear-row"><span id="gearText">N</span><span id="ammoText">PISTOL · 12/12</span></div>
+    </div>
+
+    <div id="bottomCenter"><span id="promptText"></span></div>
+    <div id="crosshair"></div>
+    <div id="toasts"></div>
+  </div>
+
+  <div id="title" class="overlay">
+    <div class="title-glow"></div>
+    <div class="title-inner">
+      <div class="eyebrow">AN ORIGINAL OPEN-WORLD CRIME SANDBOX</div>
+      <h1>VESPER<span>BAY</span></h1>
+      <div class="subtitle">GOLDEN HUSTLE</div>
+      <p class="tagline">Sun in the sky. Heat on the street.</p>
+      <div class="title-menu">
+        <button id="btnNew" class="big-btn">START NEW GAME</button>
+        <button id="btnContinue" class="big-btn ghost">CONTINUE</button>
+        <button id="btnControls" class="big-btn ghost">CONTROLS</button>
+      </div>
+      <div id="controlsCard" class="controls-card hidden">
+        <div><b>W A S D</b><span>Walk / Drive</span></div>
+        <div><b>MOUSE</b><span>Look around</span></div>
+        <div><b>SHIFT</b><span>Sprint / Boost</span></div>
+        <div><b>F</b><span>Steal / exit car</span></div>
+        <div><b>LEFT CLICK</b><span>Fire pistol</span></div>
+        <div><b>R</b><span>Reload</span></div>
+        <div><b>E</b><span>Interact</span></div>
+        <div><b>SPACE</b><span>Handbrake</span></div>
+        <div><b>ESC</b><span>Pause / Save</span></div>
+      </div>
+      <p class="story">Mara “Vex” Solis owes the wrong people a lot of money. One city, one golden hour, one last run.</p>
+      <div class="title-foot">KEYBOARD + MOUSE &nbsp;·&nbsp; BUILT ENTIRELY FROM PROCEDURAL GEOMETRY &amp; SOUND</div>
+    </div>
+  </div>
+
+  <div id="pause" class="overlay hidden">
+    <div class="modal">
+      <div class="modal-kicker">TIME OUT</div>
+      <h2>PAUSED</h2>
+      <div class="modal-menu">
+        <button id="btnResume" class="big-btn">RESUME</button>
+        <button id="btnSave" class="big-btn ghost">SAVE GAME</button>
+        <button id="btnRestart" class="big-btn ghost">RESTART STORY</button>
+        <button id="btnQuit" class="big-btn ghost">QUIT TO TITLE</button>
+      </div>
+      <div class="modal-note">Your progress saves automatically after every job.</div>
+    </div>
+  </div>
+
+  <div id="result" class="overlay hidden">
+    <div class="modal result-modal">
+      <div id="resultKicker" class="modal-kicker">JOB REPORT</div>
+      <h2 id="resultTitle">MISSION COMPLETE</h2>
+      <p id="resultBody"></p>
+      <div id="resultReward" class="reward"></div>
+      <div class="modal-menu">
+        <button id="btnResult" class="big-btn">CONTINUE</button>
+      </div>
+    </div>
+  </div>
+</div>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>

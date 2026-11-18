@@ -1,1 +1,6 @@
+# Build/test outputs and local tooling are not part of the entry.
 out/
+node_modules/
+artifacts/
+*.log
+.DS_Store

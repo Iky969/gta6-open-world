@@ -20,6 +20,34 @@ import { buildDossier } from './vendor/makefun-game.ts';
 const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
+// Vesper Bay entry: refuse to hand in a half-built game. Every hand-in must carry
+// the page, the game modules, the vendored three.js build and the screenshot set.
+const requiredGameFiles = [
+  'index.html',
+  'style.css',
+  'src/main.js',
+  'vendor/three.module.min.js',
+];
+
+function verifyGameFiles(root: string): void {
+  for (const name of requiredGameFiles) {
+    if (!existsSync(join(root, 'game', name))) {
+      throw new Error(`Vesper Bay hand-in is missing game/${name}`);
+    }
+  }
+}
+
+verifyGameFiles(here);
+
+// The cover plus three gameplay frames are part of the hand-in as well.
+const requiredScreens = ['1-title.jpg', '2-play.jpg', '3-drive.jpg', '4-wanted.jpg'];
+for (const name of requiredScreens) {
+  if (!existsSync(join(here, 'screenshots', name))) {
+    throw new Error(`Vesper Bay hand-in is missing screenshots/${name}`);
+  }
+}
+console.log(`Vesper Bay: handing in ${requiredGameFiles.length} core files and ${requiredScreens.length} screenshots.`);
+
 mkdirSync(out, { recursive: true });
 cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
 mkdirSync(join(out, 'screenshots'), { recursive: true });

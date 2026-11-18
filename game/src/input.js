@@ -1,53 +1,73 @@
-// Keyboard and pointer input. Held keys give a steering direction; one-shot presses (start or
-// restart, pause) are queued as bit flags and taken once by the loop, so a press between two
-// frames is never lost and never counted twice.
+// Keyboard/mouse input with an optional virtual override used by the ?shot=
+// controller, so the same game code drives live play and deterministic captures.
 
-export const ACTION_CONFIRM = 1;
-export const ACTION_PAUSE = 2;
+export class Input {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.keys = new Set();
+    this.pressed = new Set();
+    this.mouseDown = false;
+    this.mouseClicked = false;
+    this.lookX = 0;
+    this.lookY = 0;
+    this.pointerLocked = false;
+    this.virtual = null;
+    this.enabled = true;
 
-const LEFT = new Set(['ArrowLeft', 'KeyA']);
-const RIGHT = new Set(['ArrowRight', 'KeyD']);
-const CONFIRM = new Set(['Space', 'Enter']);
-const PAUSE = new Set(['KeyP', 'Escape']);
+    window.addEventListener('keydown', (e) => {
+      if (!this.enabled) return;
+      if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+      if (!e.repeat) this.pressed.add(e.code);
+      this.keys.add(e.code);
+    });
+    window.addEventListener('keyup', (e) => this.keys.delete(e.code));
+    window.addEventListener('blur', () => { this.keys.clear(); this.mouseDown = false; });
 
-export function createInput(target) {
-  let left = false;
-  let right = false;
-  let actions = 0;
+    canvas.addEventListener('mousedown', (e) => {
+      if (!this.enabled) return;
+      if (e.button === 0) { this.mouseDown = true; this.mouseClicked = true; }
+      if (!this.pointerLocked && canvas.requestPointerLock) canvas.requestPointerLock();
+    });
+    window.addEventListener('mouseup', (e) => { if (e.button === 0) this.mouseDown = false; });
+    document.addEventListener('pointerlockchange', () => {
+      this.pointerLocked = document.pointerLockElement === canvas;
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (!this.enabled || this.virtual) return;
+      if (this.pointerLocked || this.mouseDown) {
+        this.lookX += e.movementX || 0;
+        this.lookY += e.movementY || 0;
+      }
+    });
+  }
 
-  window.addEventListener('keydown', (event) => {
-    if (LEFT.has(event.code)) left = true;
-    else if (RIGHT.has(event.code)) right = true;
-    else if (CONFIRM.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_CONFIRM;
-    } else if (PAUSE.has(event.code)) {
-      if (!event.repeat) actions |= ACTION_PAUSE;
-    } else return;
-    event.preventDefault();
-  });
-  window.addEventListener('keyup', (event) => {
-    if (LEFT.has(event.code)) left = false;
-    else if (RIGHT.has(event.code)) right = false;
-  });
-  // A key released while the tab is hidden never sends keyup: let go of everything on blur.
-  window.addEventListener('blur', () => {
-    left = false;
-    right = false;
-  });
-  target.addEventListener('pointerdown', () => {
-    actions |= ACTION_CONFIRM;
-  });
+  setVirtual(state) { this.virtual = state; }
 
-  return {
-    /** -1 for left, 1 for right, 0 for neither or both. */
-    direction() {
-      return (right ? 1 : 0) - (left ? 1 : 0);
-    },
-    /** The one-shot presses since the last call, as ACTION_* flags. */
-    takeActions() {
-      const taken = actions;
-      actions = 0;
-      return taken;
-    },
-  };
+  down(code) {
+    return this.virtual ? this.virtual.keys.has(code) : this.keys.has(code);
+  }
+
+  justPressed(code) {
+    return this.virtual ? this.virtual.pressed.has(code) : this.pressed.has(code);
+  }
+
+  get firing() { return this.virtual ? !!this.virtual.mouseDown : this.mouseDown; }
+  get firePressed() { return this.virtual ? !!this.virtual.mouseClicked : this.mouseClicked; }
+
+  get look() {
+    if (this.virtual) return { x: this.virtual.lookX || 0, y: this.virtual.lookY || 0 };
+    return { x: this.lookX, y: this.lookY };
+  }
+
+  clearLook() {
+    if (this.virtual) { this.virtual.lookX = 0; this.virtual.lookY = 0; }
+    else { this.lookX = 0; this.lookY = 0; }
+  }
+
+  endFrame() {
+    this.pressed.clear();
+    this.mouseClicked = false;
+    if (this.virtual) this.virtual.pressed.clear();
+    if (this.virtual) this.virtual.mouseClicked = false;
+  }
 }
