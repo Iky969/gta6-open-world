@@ -73,7 +73,7 @@ export function buildCity(scene, rng) {
   // --- ground, water and shore ------------------------------------------------
   const sandTex = makePavementTexture(rng);
   sandTex.repeat.set(18, 18);
-  const ground = flatPlane(1500, 1500, new THREE.MeshStandardMaterial({ map: sandTex, color: 0xe9cfa4, roughness: 1 }), 0, 0, -0.06);
+  const ground = flatPlane(1500, 1500, new THREE.MeshStandardMaterial({ map: sandTex, color: 0xb9a583, roughness: 1 }), 0, 0, -0.06);
   scene.add(ground);
 
   const waterTex = makeWaterTexture(rng);
@@ -170,6 +170,11 @@ export function buildCity(scene, rng) {
     const vent = new THREE.BoxGeometry(Math.min(6, w * .4), 1.8 + rng() * 2.2, Math.min(5, d * .35));
     vent.translate(x + randRange(rng, -w * .2, w * .2), h + 1, z + randRange(rng, -d * .2, d * .2));
     roofGeoms.push(vent);
+    // Cap the top face with a plain slab: the facade texture also maps onto the
+    // roof of a BoxGeometry, which makes windows appear on top of buildings.
+    const cap = new THREE.BoxGeometry(w + 0.4, 0.3, d + 0.4);
+    cap.translate(x, h + 0.15, z);
+    roofGeoms.push(cap);
     if (h > 30 && chance(rng, 0.5)) {
       const mast = new THREE.CylinderGeometry(0.16, 0.22, 6 + rng() * 6, 6);
       mast.translate(x + randRange(rng, -w * .25, w * .25), h + 4, z + randRange(rng, -d * .25, d * .25));
@@ -181,7 +186,7 @@ export function buildCity(scene, rng) {
   const lot = CITY.spacing - CITY.roadWidth - CITY.lotInset * 2;
   const blockPavement = makePavementTexture(rng);
   blockPavement.repeat.set(4, 4);
-  const blockPavementMat = new THREE.MeshStandardMaterial({ map: blockPavement, color: 0xd8c8ad, roughness: 1 });
+  const blockPavementMat = new THREE.MeshStandardMaterial({ map: blockPavement, color: 0xbdb098, roughness: 1 });
   for (let a = 0; a < CITY.grid - 1; a++) {
     for (let b = 0; b < CITY.grid - 1; b++) {
       const cx = coord(a) + CITY.spacing / 2;

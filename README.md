@@ -15,7 +15,7 @@ The presentation deliberately avoids the generic neon/violet look. It uses the P
 - all code-drawn textures are switched to nearest filtering;
 - signage and night-sky colours are muted to warm amber, teal-grey and slate instead of saturated neon.
 
-`preview/gameplay.mp4` is a real browser recording for visual review; `screenshots/` holds deterministic frames from the game's own `?shot=` modes.
+`screenshots/` holds deterministic frames from the game's own `?shot=` modes.
 
 ## Requirements and running
 

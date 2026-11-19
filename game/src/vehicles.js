@@ -137,7 +137,9 @@ export class Vehicle {
     }
     if (this.damageState === 3) {
       this.wreckTimer -= dt;
-      this.mesh.position.y = Math.max(-1.4, this.mesh.position.y - dt * .6);
+      // Settle onto the ground instead of sinking through it: a wreck that
+      // disappears under the asphalt reads as a rendering bug in captures.
+      this.mesh.position.y = Math.max(0, this.mesh.position.y - dt * .6);
       this.mesh.rotation.z += dt * .25;
       if (this.wreckTimer <= 0) this.mesh.visible = false;
     }

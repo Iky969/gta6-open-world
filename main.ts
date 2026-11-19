@@ -2,7 +2,7 @@
 // this directory's game/ folder, plain static files a desktop browser loads offline
 // (game/index.html and its ES modules, three.js vendored under game/vendor/, no network
 // request). This program hands it in: it checks that every file the page loads is present,
-// copies game/, screenshots/ and the preview recording to /output, and writes
+// copies game/ and screenshots/ to /output, and writes
 // /output/dossier.json, the summary the judge reads, with the vendored make.fun library.
 //
 // Serve it locally with `node serve.ts`, then open http://localhost:8080.
@@ -86,23 +86,12 @@ for (const name of requiredScreens) {
     throw new Error(`Vesper Bay hand-in is missing screenshots/${name}`);
   }
 }
-// The gameplay recording the judge watches beside the screenshots.
-const previewFile = join(here, 'preview', 'gameplay.mp4');
-if (!existsSync(previewFile)) throw new Error('Vesper Bay hand-in is missing preview/gameplay.mp4');
-console.log(`Vesper Bay: handing in ${requiredGameFiles.length} core files, ${requiredScreens.length} screenshots and preview/gameplay.mp4.`);
+console.log(`Vesper Bay: handing in ${requiredGameFiles.length} core files and ${requiredScreens.length} screenshots.`);
 
 mkdirSync(out, { recursive: true });
 cpSync(join(here, 'game'), join(out, 'game'), { recursive: true });
 mkdirSync(join(out, 'screenshots'), { recursive: true });
 if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
-// The recording goes to preview/ for the judge to play, and under game/ as an asset so the
-// dossier's Game block lists it: buildDossier reads only game/ and screenshots/, and
-// dossier.json must equal what it writes byte for byte (the dossier_matches gate).
-mkdirSync(join(out, 'preview'), { recursive: true });
-cpSync(previewFile, join(out, 'preview', 'gameplay.mp4'));
-mkdirSync(join(out, 'game', 'preview'), { recursive: true });
-cpSync(previewFile, join(out, 'game', 'preview', 'gameplay.mp4'));
-
 // The scorer's own caps (reference/gate.json): only text_max_bytes shapes the bytes; the others refuse an entry the
 // scorer would refuse (more than 4 screenshots or one over 256 KiB; more than 993 files in game/ or 48 MiB of game
 // files, in all, or a path under game/ over 1000 bytes: game/ counts beside /output's own 1000-entry cap, its
