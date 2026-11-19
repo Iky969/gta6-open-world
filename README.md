@@ -6,6 +6,17 @@
 
 An original open-world crime game built for [make.fun](https://make.fun)'s `gta6-01` bounty. Nothing from Rockstar Games: the city, characters, cars, story, art direction and sounds are all invented here.
 
+## Visual direction — PS1 retro
+
+The presentation deliberately avoids the generic neon/violet look. It uses the PS1-style technique from the `/low-poly` animation skill:
+
+- the 3D scene renders into a target at 1/3 resolution and is upscaled with nearest-neighbour filtering (`game/src/retro.js`);
+- every material gets a vertex-snapping and 15-bit ordered-dither shader patch, copied from that skill's shader;
+- all code-drawn textures are switched to nearest filtering;
+- signage and night-sky colours are muted to warm amber, teal-grey and slate instead of saturated neon.
+
+`preview/gameplay.mp4` is a real browser recording for visual review; `screenshots/` holds deterministic frames from the game's own `?shot=` modes.
+
 ## Requirements and running
 
 - **Node.js 22.18 or newer** is required for `main.ts` and `serve.ts` (Node 24/26 also work). No packages are installed; both use the standard library only.

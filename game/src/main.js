@@ -26,6 +26,7 @@ import { saveGame, loadGame, hasSave, clearSave } from './save.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { createShotController } from './shots.js';
 import { WeatherSystem } from './weather.js';
+import { installRetro } from './retro.js';
 
 function showWebGLFallback(reason) {
   const app = document.getElementById('app');
@@ -54,7 +55,7 @@ function boot() {
   }
   let qualityCap = settings.quality === 'low' ? .7 : settings.quality === 'medium' ? 1 : 1.35;
   let adaptiveScale = 1;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityCap) * adaptiveScale);
+  renderer.setPixelRatio(1);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = settings.quality !== 'low';
   renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -106,6 +107,10 @@ function boot() {
     scene.add(mesh);
     return { ...def, mesh, active: true, timer: 0 };
   });
+  // PS1-style presentation from the /low-poly skill: coarse render target,
+  // vertex snapping, 15-bit dithering and nearest-neighbour textures.
+  const retro = installRetro(scene, renderer, camera, { scale: 3 });
+
   player.weapon = 0;
   player.ammoByWeapon = [WEAPONS[0].ammo, WEAPONS[1].ammo];
 
@@ -151,7 +156,7 @@ function boot() {
     input.setBindings(settings.bindings);
     qualityCap = settings.quality === 'low' ? .7 : settings.quality === 'medium' ? 1 : 1.35;
     renderer.shadowMap.enabled = settings.quality !== 'low';
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityCap) * adaptiveScale);
+    renderer.setPixelRatio(1);
     camera.fov = settings.fov;
     camera.updateProjectionMatrix();
     saveSettings(settings);
@@ -541,6 +546,7 @@ function boot() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    retro.resize(window.innerWidth, window.innerHeight);
   });
 
   // --- main loop --------------------------------------------------------------
@@ -576,7 +582,7 @@ function boot() {
       combat.update(dt);
       if (!game.hud.root.classList.contains('hidden')) hud.update(game);
     }
-    renderer.render(scene, camera);
+    retro.render();
     if (!window.__ready) window.__ready = true;
 
     // Adaptive pixel ratio: shed resolution when frames are slow, restore it
@@ -587,7 +593,7 @@ function boot() {
         const fps = fpsFrames / fpsAccum;
         if (fps < 45) adaptiveScale = Math.max(.6, adaptiveScale - .08);
         else if (fps > 57) adaptiveScale = Math.min(1, adaptiveScale + .05);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityCap) * adaptiveScale);
+        renderer.setPixelRatio(1);
         fpsAccum = 0; fpsFrames = 0;
       }
     }

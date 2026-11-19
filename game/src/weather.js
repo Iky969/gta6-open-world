@@ -66,13 +66,13 @@ export class WeatherSystem {
     if (this.sky && this.sky.userData.uniforms) {
       const u = this.sky.userData.uniforms;
       lerpColor(0x050b1e, 0x143a5c, day, u.topColor.value);
-      lerpColor(0x101d3c, 0x77b3c4, day, u.midColor.value);
-      lerpColor(0x2a2140, 0xffc08a, day, u.horizonColor.value);
-      lerpColor(0x0a1224, 0xd88963, day, u.lowColor.value);
-      lerpColor(0x7d93d0, 0xffe6ae, day, u.sunColor.value);
+      lerpColor(0x1b2732, 0x77b3c4, day, u.midColor.value);
+      lerpColor(0x27333c, 0xffc08a, day, u.horizonColor.value);
+      lerpColor(0x111923, 0xd88963, day, u.lowColor.value);
+      lerpColor(0x9aa8b8, 0xffe6ae, day, u.sunColor.value);
     }
-    // Neon glows hardest at dusk and after dark.
-    const neonGlow = .55 + (1 - day) * 1.35;
+    // Keep the signs readable but never let them wash the frame in cyan/magenta.
+    const neonGlow = .45 + (1 - day) * .45;
     const mats = this.city.neonMaterials || [];
     for (let i = 0; i < mats.length; i++) {
       if (!this.neonBase[i]) continue;

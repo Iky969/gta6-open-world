@@ -20,12 +20,12 @@ export const CAMERA = {
 
 export const PALETTE = {
   gold: 0xf7c873,
-  teal: 0x5ce0d0,
+  teal: 0x4fb6a8,
   red: 0xff6b57,
   asphalt: 0x2b3540,
   pavement: 0xcbb79a,
   sand: 0xe7c79a,
-  ocean: 0x2e9aa6,
+  ocean: 0x367f85,
   fog: 0xe9ab7e,
 };
 

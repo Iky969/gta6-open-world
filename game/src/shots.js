@@ -34,6 +34,7 @@ export function createShotController(mode, game) {
       return;
     }
     game.beginNewGame();
+    game.hud.toasts.replaceChildren(); // clean deterministic captures, no startup toasts
     game.menus.hideTitle();
     game.hud.show(true);
     game.mode = mode === 'end' ? 'result' : 'playing';
