@@ -216,6 +216,11 @@ function boot() {
     game.lastStolenName = '';
     mission.setProgress(0, 0, []);
     mission.start(0);
+    // Dev-only capture aid: start behind the wheel so a recording shows real
+    // driving instead of a stationary title-screen frame. No effect in normal play.
+    if (!shotMode && params.get('startcar') === '1') {
+      giveVehicle('VULCAN GT', START_POSITION.x + 8, START_POSITION.z, Math.PI, 0xcf4438);
+    }
     game.camYaw = .3; game.camPitch = .22;
     game.mode = 'playing';
     game.menus.hideTitle(); game.menus.hidePause(); game.menus.hideResult();

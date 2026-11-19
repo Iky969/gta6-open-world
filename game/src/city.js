@@ -345,13 +345,19 @@ export function buildCity(scene, rng) {
       frondGeoms.push(frond);
     }
   }
+  // Palms belong on the sidewalk corners of each block: clear of the driving
+  // lanes (roadWidth/2) and clear of the building footprints (the central lot
+  // strip). The old placement let `along` land inside a road, which put trees
+  // in the middle of the street.
   for (let i = 0; i < 78; i++) {
-    const a = randInt(rng, 0, CITY.grid - 1);
-    const b = randInt(rng, 0, CITY.grid - 1);
-    const along = randRange(rng, -CITY.spacing / 2 + 6, CITY.spacing / 2 - 6);
-    const off = CITY.spacing / 2 + randRange(rng, 3, 7);
-    if (chance(rng, .5)) addPalm(coord(a) + along, coord(b) + off);
-    else addPalm(coord(a) + off, coord(b) + along);
+    const a = randInt(rng, 0, CITY.grid - 2);
+    const b = randInt(rng, 0, CITY.grid - 2);
+    const cx = coord(a) + CITY.spacing / 2;
+    const cz = coord(b) + CITY.spacing / 2;
+    const inset = CITY.roadWidth / 2 + randRange(rng, 3, 6);
+    const strip = CITY.spacing / 2 - inset;
+    addPalm(cx + (chance(rng, .5) ? -strip : strip),
+            cz + (chance(rng, .5) ? -strip : strip));
   }
   for (let k = 0; k < 16; k++) addPalm(-44 + randRange(rng, -30, 30), 132 + randRange(rng, -30, 30), .8);
 
