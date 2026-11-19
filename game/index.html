@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vesper Bay — Golden Hustle</title>
 <link rel="stylesheet" href="./style.css">
 <script type="importmap">
@@ -17,6 +17,15 @@
 <div id="app">
   <canvas id="view"></canvas>
   <div id="vignette"></div>
+  <div id="weatherTint"></div>
+
+  <div id="webglFallback" class="overlay hidden">
+    <div class="modal">
+      <div class="modal-kicker">GRAPHICS UNAVAILABLE</div>
+      <h2>NO WEBGL</h2>
+      <p>Vesper Bay needs WebGL. Try a recent desktop Chrome with hardware acceleration enabled, then reload this page.</p>
+    </div>
+  </div>
 
   <div id="hud" class="hidden">
     <div id="topLeft" class="panel">
@@ -42,10 +51,12 @@
       <div id="vehicleName">ON FOOT</div>
       <div class="speedo"><span id="speedText">0</span><small>MPH</small></div>
       <div class="gear-row"><span id="gearText">N</span><span id="ammoText">PISTOL · 12/12</span></div>
+      <div id="radioText">RADIO · DRIVE TO LISTEN</div>
     </div>
 
     <div id="bottomCenter"><span id="promptText"></span></div>
     <div id="crosshair"></div>
+    <div id="audioCue"></div>
     <div id="toasts"></div>
   </div>
 
@@ -62,18 +73,22 @@
         <button id="btnControls" class="big-btn ghost">CONTROLS</button>
       </div>
       <div id="controlsCard" class="controls-card hidden">
-        <div><b>W A S D</b><span>Walk / Drive</span></div>
+        <div><b>W A S D</b><span>Walk / drive</span></div>
         <div><b>MOUSE</b><span>Look around</span></div>
-        <div><b>SHIFT</b><span>Sprint / Boost</span></div>
+        <div><b>SHIFT</b><span>Sprint / boost</span></div>
         <div><b>F</b><span>Steal / exit car</span></div>
-        <div><b>LEFT CLICK</b><span>Fire pistol</span></div>
+        <div><b>LEFT CLICK</b><span>Fire weapon</span></div>
         <div><b>R</b><span>Reload</span></div>
-        <div><b>E</b><span>Interact</span></div>
+        <div><b>E</b><span>Talk to Oro / start jobs / save</span></div>
+        <div><b>2</b><span>Switch to SMG</span></div>
         <div><b>SPACE</b><span>Handbrake</span></div>
-        <div><b>ESC</b><span>Pause / Save</span></div>
+        <div><b>Q / M</b><span>Radio station / mute</span></div>
+        <div><b>N</b><span>Toggle rain</span></div>
+        <div><b>Z / X</b><span>Map zoom in / out</span></div>
+        <div><b>ESC</b><span>Pause / settings / save</span></div>
       </div>
-      <p class="story">Mara “Vex” Solis owes the wrong people a lot of money. One city, one golden hour, one last run.</p>
-      <div class="title-foot">KEYBOARD + MOUSE &nbsp;·&nbsp; BUILT ENTIRELY FROM PROCEDURAL GEOMETRY &amp; SOUND</div>
+      <p class="story">Mara “Vex” Solis owes the wrong people a lot of money. One city, an endless golden hour, one last run.</p>
+      <div class="title-foot">KEYBOARD + MOUSE OR GAMEPAD &nbsp;·&nbsp; BUILT FROM PROCEDURAL GEOMETRY &amp; SOUND</div>
     </div>
   </div>
 
@@ -84,10 +99,46 @@
       <div class="modal-menu">
         <button id="btnResume" class="big-btn">RESUME</button>
         <button id="btnSave" class="big-btn ghost">SAVE GAME</button>
+        <button id="btnSettings" class="big-btn ghost">SETTINGS</button>
         <button id="btnRestart" class="big-btn ghost">RESTART STORY</button>
         <button id="btnQuit" class="big-btn ghost">QUIT TO TITLE</button>
       </div>
-      <div class="modal-note">Your progress saves automatically after every job.</div>
+      <div class="modal-note">Your progress saves automatically after every job, and at Oro's safehouse.</div>
+    </div>
+  </div>
+
+  <div id="settings" class="overlay hidden">
+    <div class="modal settings-modal">
+      <div class="modal-kicker">OPTIONS</div>
+      <h2>SETTINGS</h2>
+      <label>VOLUME <input id="setVolume" type="range" min="0" max="100" value="70"></label>
+      <label>LOOK SENSITIVITY <input id="setSensitivity" type="range" min="25" max="300" value="100"></label>
+      <label>FIELD OF VIEW <input id="setFov" type="range" min="50" max="90" value="62"></label>
+      <label>GRAPHICS <select id="setQuality"><option value="low">LOW</option><option value="medium">MEDIUM</option><option value="high">HIGH</option></select></label>
+      <label>RADIO <select id="setStation"><option value="0">RADIO SOL</option><option value="1">KCR LOW END</option><option value="2">ORO FM</option><option value="3">VOLT WAVE</option></select></label>
+      <div class="bind-grid">
+        <span>Interact</span><button class="bind-btn" data-bind="interact">E</button>
+        <span>Enter / exit</span><button class="bind-btn" data-bind="enter">F</button>
+        <span>Switch weapon</span><button class="bind-btn" data-bind="weapon">2</button>
+        <span>Radio</span><button class="bind-btn" data-bind="radio">Q</button>
+        <span>Reload</span><button class="bind-btn" data-bind="reload">R</button>
+        <span>Handbrake</span><button class="bind-btn" data-bind="handbrake">SPACE</button>
+        <span>Map zoom in</span><button class="bind-btn" data-bind="mapIn">Z</button>
+        <span>Map zoom out</span><button class="bind-btn" data-bind="mapOut">X</button>
+      </div>
+      <button id="btnSettingsClose" class="big-btn">DONE</button>
+    </div>
+  </div>
+
+  <div id="confirm" class="overlay hidden">
+    <div class="modal">
+      <div class="modal-kicker">ARE YOU SURE?</div>
+      <h2>CONFIRM</h2>
+      <p id="confirmText"></p>
+      <div class="modal-menu horizontal">
+        <button id="confirmYes" class="big-btn">YES</button>
+        <button id="confirmNo" class="big-btn ghost">CANCEL</button>
+      </div>
     </div>
   </div>
 

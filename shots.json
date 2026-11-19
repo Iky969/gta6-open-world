@@ -1,6 +1,6 @@
 [
-  { "name": "1-title.jpg", "query": "?shot=start&seed=1337" },
-  { "name": "2-play.jpg", "query": "?shot=play&seed=1337" },
-  { "name": "3-drive.jpg", "query": "?shot=drive&seed=1337" },
-  { "name": "4-wanted.jpg", "query": "?shot=wanted&seed=1337" }
+  { "name": "1-title.jpg", "query": "?shot=start&seed=1337", "note": "cover: title over the skyline" },
+  { "name": "2-play.jpg", "query": "?shot=play&seed=1337", "note": "on foot, traffic and HUD" },
+  { "name": "3-drive.jpg", "query": "?shot=drive&seed=1337", "note": "VULCAN GT at speed" },
+  { "name": "4-wanted.jpg", "query": "?shot=wanted&seed=1337", "note": "four-star chase with chopper" }
 ]

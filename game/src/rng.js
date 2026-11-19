@@ -1,11 +1,21 @@
-// Seeded, deterministic randomness. Every system draws from one of these so
-// ?seed=... reproduces the same city, traffic and screenshot every run.
+// Seeded, deterministic randomness. Visual generation and gameplay rolls use
+// separate streams so a crime roll can never shift the layout of the city or
+// traffic: ?shot=...&seed=... reproduces the same frame every run.
 export function makeRng(seed) {
   let s = (seed >>> 0) || 1;
   return function rng() {
     s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
     return s / 4294967296;
   };
+}
+
+// Two independent streams from one seed: visual content (city, traffic, peds,
+// effects) and gameplay outcomes (police rolls, ambushes, death). Keep the
+// split stable: adding a visual draw must not change gameplay, and vice versa.
+export function makeStreams(seed) {
+  const visual = makeRng(seed);
+  const gameplay = makeRng((seed ^ 0x9e3779b9) >>> 0);
+  return { visual, gameplay };
 }
 
 export function randRange(rng, low, high) {

@@ -1,0 +1,41 @@
+name: Vesper Bay CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18'
+
+      - name: Hand in (node main.ts)
+        run: |
+          mkdir -p out
+          MAKEFUN_OUTPUT_DIR=out node main.ts
+
+      - name: Unit tests (save and mission logic)
+        run: node tests/unit.mjs
+
+      - name: Dossier size-cap checks
+        run: |
+          node -e "
+            const fs = require('node:fs');
+            const d = JSON.parse(fs.readFileSync('out/dossier.json','utf8'));
+            const bytes = Buffer.byteLength(fs.readFileSync('out/dossier.json'));
+            if (bytes > 1572864) throw new Error('dossier over 1.5 MiB');
+            if (!d.includes('Vesper Bay') && !d.includes('VESPER BAY')) throw new Error('dossier missing game text');
+            console.log('dossier bytes', bytes);
+          "
+          find out/game -type f | wc -l
+          test "$(find out/game -type f | wc -l)" -le 993
+
+      - name: Browser smoke test
+        run: |
+          npm install --no-save playwright@1.56.0
+          npx playwright install --with-deps chromium
+          node tests/smoke.mjs

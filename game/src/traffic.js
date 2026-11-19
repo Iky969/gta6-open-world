@@ -1,5 +1,6 @@
 // Ambient traffic driving a right-hand lane graph between intersections. Cars
-// brake for whatever is in front of them and can be stolen by the player.
+// brake for whatever is in front of them, swerve around recent crashes, and can
+// be stolen by the player.
 import * as THREE from 'three';
 import { VEHICLE_TYPES, CAR_COLORS, CITY } from './config.js';
 import { pick, randRange, chance } from './rng.js';
@@ -15,7 +16,22 @@ export class TrafficSystem {
     this.rng = rng;
     this.city = city;
     this.vehicles = [];
+    this._closest = 999;
+    this._swerve = 0;
     for (let i = 0; i < count; i++) this.spawn();
+  }
+
+  // Record an obstacle ahead in the same lane. Wrecks (crashTimer > 0) widen
+  // the danger zone so traffic flows around an accident instead of through it.
+  considerObstacle(v, o, fwd) {
+    const ox = o.x - v.x, oz = o.z - v.z;
+    const ahead = ox * fwd.x + oz * fwd.z;
+    const across = Math.abs(ox * fwd.z - oz * fwd.x);
+    const width = o.crashTimer > 0 ? 5.2 : 2.6;
+    if (ahead > 0 && ahead < 20 && across < width) {
+      this._closest = Math.min(this._closest, ahead);
+      this._swerve += across < 1.2 ? (ox * fwd.z - oz * fwd.x > 0 ? 1 : -1) : 0;
+    }
   }
 
   spawn(nearIndex = -1) {
@@ -75,15 +91,15 @@ export class TrafficSystem {
 
       // Slow for cars and the player ahead in roughly the same direction.
       let closest = 999;
+      let swerve = 0;
       const fwd = v.forward;
-      const all = this.vehicles.concat(otherVehicles);
-      for (const o of all) {
-        if (o === v) continue;
-        const ox = o.x - v.x, oz = o.z - v.z;
-        const ahead = ox * fwd.x + oz * fwd.z;
-        const across = Math.abs(ox * fwd.z - oz * fwd.x);
-        if (ahead > 0 && ahead < 16 && across < 2.6) closest = Math.min(closest, ahead);
-      }
+      // Avoid concatenating arrays every frame: walk both lists in place and
+      // accumulate the nearest obstacle and a swerve impulse on scratch fields.
+      this._closest = 999; this._swerve = 0;
+      for (const o of this.vehicles) if (o !== v) this.considerObstacle(v, o, fwd);
+      for (const o of otherVehicles) if (o !== v) this.considerObstacle(v, o, fwd);
+      closest = this._closest; swerve = this._swerve;
+      if (swerve !== 0) steer = Math.max(-1, Math.min(1, steer - swerve * .55));
       const desired = Math.min(v.def.speed * .62, closest < 12 ? Math.max(0, (closest - 5) * 1.6) : v.def.speed * .62);
       const throttle = v.speed < desired - .5 ? 1 : v.speed > desired + 1 ? -1 : 0;
       v.update(dt, { throttle, steer, handbrake: false, boost: false }, colliders);

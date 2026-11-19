@@ -1,6 +1,11 @@
 # Build/test outputs and local tooling are not part of the entry.
+# Audit fix: Playwright reports and CI scratch dirs join the ignored set.
 out/
+out-a/
+out-b/
 node_modules/
 artifacts/
+test-results/
+playwright-report/
 *.log
 .DS_Store

@@ -66,7 +66,12 @@ createServer((request, response) => {
     'content-length': size,
     'cache-control': 'no-store',
   });
-  createReadStream(file).pipe(response);
+  // Audit fix: a stream that dies mid-response must not leave the client
+  // hanging. Destroy the socket so the browser sees a failed request.
+  const stream = createReadStream(file);
+  stream.on('error', () => { if (!response.headersSent) response.writeHead(500); response.destroy(); });
+  response.on('close', () => stream.destroy());
+  stream.pipe(response);
 }).listen(port, '127.0.0.1', () => {
   console.log(`game/ is on http://localhost:${port}`);
 });

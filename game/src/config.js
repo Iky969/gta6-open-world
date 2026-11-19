@@ -96,11 +96,81 @@ export const MISSIONS = [
     brief: 'A Vulcan GT is the only way out of town. Steal one and park it in the harbor chop shop.',
     steps: [
       { type: 'stealVehicle', vehicle: 'VULCAN GT', text: 'Steal a VULCAN GT' },
-      { type: 'goto', point: [176, -176], radius: 13, text: 'Drive it to the harbor chop shop' },
+      { type: 'goto', point: [176, -176], radius: 13, requiresVehicle: 'VULCAN GT', text: 'Drive it to the harbor chop shop' },
       { type: 'complete', reward: 1800, text: 'Park it. Walk away.' },
     ],
     ambushAtStep: 1,
   },
 ];
+
+// Repeatable side-job catalogue. Each has a distinct step type so the jobs play
+// differently: chase, escort, timed delivery and a straight shootout.
+export const JOBS = [
+  {
+    id: 'shadow-run',
+    name: 'SHADOW RUN',
+    brief: 'A Chrome Kings courier is fleeing across the bay. Run him off the road.',
+    steps: [
+      { type: 'goto', point: [176, 176], radius: 14, text: 'Reach the east overpass' },
+      { type: 'chase', vehicle: 'NOVA COUPE', x: 176, z: 88, heading: Math.PI / 2, text: 'Wreck the courier’s car' },
+      { type: 'complete', reward: 3200, text: 'Collect the bounty' },
+    ],
+  },
+  {
+    id: 'convoy',
+    name: 'CONVOY',
+    brief: 'Escort an Oro & Sons van to the harbor without losing it.',
+    steps: [
+      { type: 'escortPickup', point: [-176, 8], radius: 12, text: 'Meet the convoy van' },
+      { type: 'escort', point: [176, -176], radius: 16, text: 'Lead the van to the harbor' },
+      { type: 'complete', reward: 3600, text: 'Park the van. Job done.' },
+    ],
+  },
+  {
+    id: 'last-call',
+    name: 'LAST CALL',
+    brief: 'A hot package has to reach the Lantern Room before the clock dies.',
+    steps: [
+      { type: 'timedGoto', point: [-176, 176], radius: 13, time: 52, text: 'Beat the clock to The Lantern Room' },
+      { type: 'complete', reward: 2800, text: 'Hand over the package' },
+    ],
+  },
+  {
+    id: 'crossfire',
+    name: 'CROSSFIRE',
+    brief: 'The Chrome Kings hold Oro Plaza. Clear it out.',
+    steps: [
+      { type: 'shootout', point: [-44, 132], count: 5, text: 'Clear Oro Plaza of hostiles' },
+      { type: 'complete', reward: 4200, text: 'The plaza is ours' },
+    ],
+  },
+];
+
+// Two original sidearms. Switching with the weapon key changes damage, fire
+// rate and magazine size, and the HUD follows along.
+export const WEAPONS = [
+  { id: 'pistol', name: 'PISTOL', damage: 34, ammo: 12, cooldown: .16, color: 0xffe09a, range: 78 },
+  { id: 'smg', name: 'BURST SMG', damage: 19, ammo: 40, cooldown: .085, color: 0xffd27a, range: 62 },
+];
+
+export const PICKUPS = [
+  { type: 'health', x: -88, z: 0, amount: 35 },
+  { type: 'armor', x: 88, z: 0, amount: 40 },
+  { type: 'ammo', x: 176, z: 176, amount: 24 },
+  { type: 'health', x: 0, z: -176, amount: 35 },
+];
+
+export const SAFEHOUSE = { x: -176, z: 0, name: 'ORO’S SAFEHOUSE' };
+
+export const POLICE_CONFIG = {
+  roadblockStars: 3,   // cruisers park across the road ahead at 3+ stars
+  heliStars: 4,        // a search helicopter joins at 4-5 stars
+  maxUnits: 12,
+};
+
+export const WEATHER = {
+  cycleSeconds: 210,   // one dawn-to-dawn day
+  goldenHour: 0.26,    // phase the opening story is art-directed around
+};
 
 export const START_POSITION = { x: -88, z: 88 };

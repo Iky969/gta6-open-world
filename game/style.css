@@ -1,3 +1,5 @@
+/* Vesper Bay HUD and menus. Kept in one stylesheet so game/ is a static,
+   build-free directory; new panels reuse the same panel/modal vocabulary. */
 :root {
   --gold: #f7c873;
   --gold-dim: #b98b3e;
@@ -103,6 +105,23 @@ h1 span { display: block; color: var(--gold); }
 .reward { color: var(--gold); font-size: 20px; font-weight: bold; letter-spacing: 1px; margin-bottom: 20px; min-height: 24px; }
 #resultKicker.danger { color: var(--red); }
 #resultTitle.danger { color: var(--red); }
+
+/* ---------- Weather, audio cues and extras ---------- */
+#weatherTint { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(20,34,58,.6), rgba(10,22,38,.25)); opacity: 0; transition: opacity .8s linear; }
+#audioCue { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; pointer-events: none; transition: box-shadow .17s; opacity: .9; }
+#audioCue.flash { box-shadow: 0 0 18px 5px var(--gold); }
+#radioText { margin-top: 6px; padding-top: 5px; border-top: 1px solid rgba(255,255,255,.12); color: var(--teal); font-size: 9px; letter-spacing: 1px; white-space: nowrap; }
+#webglFallback { background: #09131d; z-index: 20; }
+
+.modal.settings-modal { width: min(520px, 90vw); text-align: left; }
+.settings-modal label { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 10px 0; font-size: 11px; letter-spacing: 1.4px; color: #c3d7e0; }
+.settings-modal input[type=range] { width: 240px; accent-color: var(--gold); }
+.settings-modal select { background: var(--ink); color: var(--gold); border: 1px solid var(--line); padding: 5px 8px; font-family: var(--font); }
+.bind-grid { display: grid; grid-template-columns: 1fr 110px; gap: 6px 10px; align-items: center; margin: 16px 0; font-size: 10px; letter-spacing: 1px; color: #9fb6c2; }
+.bind-btn { cursor: pointer; background: var(--ink); color: var(--gold); border: 1px solid var(--line); padding: 5px; font-family: var(--font); font-size: 10px; }
+.bind-btn:hover { background: rgba(247,200,115,.18); }
+.modal-menu.horizontal { flex-direction: row; width: auto; margin-top: 18px; }
+.modal-menu.horizontal .big-btn { flex: 1; text-align: center; }
 
 @media (max-width: 780px) {
   #topRight { width: 210px; }

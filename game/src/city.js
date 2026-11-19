@@ -2,7 +2,7 @@
 // facades, landmarks, palms, lamps and a glass pier. Geometry is merged by
 // material so the whole city draws in a handful of calls.
 import * as THREE from 'three';
-import { CITY, PALETTE, FACADE_STYLES, BILLBOARD_WORDS } from './config.js';
+import { CITY, PALETTE, FACADE_STYLES, BILLBOARD_WORDS, SAFEHOUSE } from './config.js';
 import { randRange, randInt, pick, chance } from './rng.js';
 import {
   makeAsphaltTexture, makePavementTexture, makeWaterTexture,
@@ -297,6 +297,13 @@ export function buildCity(scene, rng) {
   colliders.push({ x: -44, z: 132, hw: 10, hd: 10, height: 2 });
   neonSign('CASTA', 'GOLDEN HOUR GOODS', -44, 24, 96, 18, 0xffb46b, 0);
 
+  // ORO'S SAFEHOUSE — a small teal beacon where the player can save.
+  const safeBase = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, .5, 24), concrete);
+  safeBase.position.set(SAFEHOUSE.x, .25, SAFEHOUSE.z); safeBase.receiveShadow = true; scene.add(safeBase);
+  const safeRing = new THREE.Mesh(new THREE.TorusGeometry(4.4, .28, 8, 32), neon(0x5ce0d0));
+  safeRing.rotation.x = Math.PI / 2; safeRing.position.set(SAFEHOUSE.x, .6, SAFEHOUSE.z); scene.add(safeRing);
+  neonSign('CASTA', 'SAFEHOUSE · SAVE HERE', SAFEHOUSE.x, 12, SAFEHOUSE.z + 6, 15, 0x5ce0d0, 0);
+
   // THE LANTERN ROOM and the harbor chop shop — job destinations.
   box(38, 34, 34, -220, 17, 220, glass);
   colliders.push({ x: -220, z: 220, hw: 19, hd: 17, height: 34 });
@@ -367,7 +374,7 @@ export function buildCity(scene, rng) {
   for (const m of [trunkMesh, frondMesh, poleMesh, bulbMesh]) { m.castShadow = false; scene.add(m); }
 
   return {
-    colliders, nodes, sidewalkLoops,
+    colliders, nodes, sidewalkLoops, neonMaterials,
     pier: { x: 330, z: CITY.pierZ },
     water,
     update(dt) {

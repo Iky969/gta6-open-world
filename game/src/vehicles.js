@@ -1,5 +1,7 @@
 // Original low-poly vehicles and their arcade driving model. Cars are simple
 // groups of boxes/cylinders assembled from shared geometry where possible.
+// Damage advances smoke -> fire -> explosion; crashes also flag nearby traffic
+// so ambient cars brake and swerve around an accident.
 import * as THREE from 'three';
 import { CITY } from './config.js';
 
@@ -83,9 +85,68 @@ export class Vehicle {
     this.traffic = null;
     this.disabled = false;
     this.horn = 0;
+    // Damage visuals: 0 intact, 1 smoking, 2 burning, 3 wrecked/exploded.
+    this.damageState = 0;
+    this.crashTimer = 0;
+    this.onDestroyed = null;
+    this.smoke = null;
+    this.fire = null;
+    this.wreckTimer = 0;
   }
 
   get forward() { return { x: Math.sin(this.heading), z: Math.cos(this.heading) }; }
+
+  // Build the smoke/fire sprites lazily: most cars never get damaged, so an
+  // untouched traffic car costs nothing extra.
+  ensureDamageFx() {
+    if (this.smoke) return;
+    const smokeMat = new THREE.MeshBasicMaterial({ color: 0x363b40, transparent: true, opacity: .55, depthWrite: false });
+    const fireMat = new THREE.MeshBasicMaterial({ color: 0xff7b2e, transparent: true, opacity: .85, depthWrite: false, toneMapped: false });
+    const g = new THREE.SphereGeometry(.42, 7, 5);
+    this.smoke = [];
+    this.fire = [];
+    for (let i = 0; i < 5; i++) {
+      const s = new THREE.Mesh(g, smokeMat.clone());
+      s.position.set((i - 2) * .16, 1.5 + i * .12, -1.1);
+      this.mesh.add(s);
+      this.smoke.push(s);
+      const f = new THREE.Mesh(g, fireMat.clone());
+      f.scale.setScalar(.7);
+      f.position.set((i - 2) * .14, 1.1, -1.0);
+      f.visible = false;
+      this.mesh.add(f);
+      this.fire.push(f);
+    }
+  }
+
+  updateDamage(dt, time) {
+    if (this.damageState === 0 || !this.smoke) return;
+    for (let i = 0; i < this.smoke.length; i++) {
+      const s = this.smoke[i];
+      s.position.y = 1.5 + i * .12 + Math.sin(time * 2 + i) * .18;
+      s.scale.setScalar(.7 + Math.sin(time * 2.5 + i * 1.3) * .3);
+      s.material.opacity = this.damageState === 2 ? .62 : .42;
+    }
+    if (this.damageState === 2) {
+      for (let i = 0; i < this.fire.length; i++) {
+        const f = this.fire[i];
+        f.visible = true;
+        f.scale.setScalar(.6 + Math.abs(Math.sin(time * 9 + i * 2)) * .7);
+        f.material.color.setHex(i % 2 ? 0xffb23c : 0xff5a24);
+      }
+    }
+    if (this.damageState === 3) {
+      this.wreckTimer -= dt;
+      this.mesh.position.y = Math.max(-1.4, this.mesh.position.y - dt * .6);
+      this.mesh.rotation.z += dt * .25;
+      if (this.wreckTimer <= 0) this.mesh.visible = false;
+    }
+  }
+
+  crash(intensity = 1) {
+    this.crashTimer = Math.max(this.crashTimer, 2.5);
+    if (intensity > 8) this.damage(intensity * 1.6);
+  }
 
   update(dt, controls, colliders = []) {
     if (this.disabled) { this.speed *= Math.exp(-4 * dt); this.sync(dt); return; }
@@ -112,16 +173,19 @@ export class Vehicle {
       const ox = c.hw + this.radius - Math.abs(dx);
       const oz = c.hd + this.radius - Math.abs(dz);
       if (ox > 0 && oz > 0) {
+        const impact = Math.abs(this.speed);
         if (ox < oz) { this.x += Math.sign(dx || 1) * ox; this.speed *= -.28; }
         else { this.z += Math.sign(dz || 1) * oz; this.speed *= -.28; }
+        if (impact > 6) this.crash(impact);
       }
     }
     // Ocean is lethal unless you are on the pier causeway.
     const onPier = Math.abs(this.z - CITY.pierZ) < 10 && this.x > CITY.limit - 20;
-    if (!onPier && this.x > CITY.oceanX - 6) { this.x = CITY.oceanX - 6; this.speed *= -.4; }
+    if (!onPier && this.x > CITY.oceanX - 6) { this.x = CITY.oceanX - 6; this.speed *= -.4; this.crash(12); }
     if (this.x < -CITY.limit) { this.x = -CITY.limit; this.speed *= -.4; }
     if (this.z < -CITY.limit) { this.z = -CITY.limit; this.speed *= -.4; }
     if (this.z > CITY.limit) { this.z = -CITY.limit + 5; this.speed *= -.4; }
+    this.crashTimer = Math.max(0, this.crashTimer - dt);
     this.sync(dt);
   }
 
@@ -137,13 +201,24 @@ export class Vehicle {
       red.material.color.setHex(flash ? 0xff2d2d : 0x5a1414);
       blue.material.color.setHex(flash ? 0x14214a : 0x2d6bff);
     }
+    this.updateDamage(dt, time);
   }
 
   damage(amount) {
+    if (this.disabled) return false;
     this.health -= amount;
+    if (this.health < this.maxHealth * .5 && this.damageState === 0) {
+      this.ensureDamageFx();
+      this.damageState = 1;
+    }
+    if (this.health < this.maxHealth * .25 && this.damageState === 1) this.damageState = 2;
     if (this.health <= 0) {
       this.health = 0;
       this.disabled = true;
+      this.ensureDamageFx();
+      this.damageState = 3;
+      this.wreckTimer = 2.6;
+      if (this.onDestroyed) this.onDestroyed(this);
       return true;
     }
     return false;

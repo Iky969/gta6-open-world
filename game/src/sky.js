@@ -42,5 +42,9 @@ export function createSky(sunDirection) {
   const sky = new THREE.Mesh(geometry, material);
   sky.frustumCulled = false;
   sky.renderOrder = -1000;
+  // Expose the gradient uniforms so the day/night cycle can retint the sky
+  // from golden hour to midnight without rebuilding the shader.
+  sky.userData.uniforms = material.uniforms;
+  sky.userData.baseSunDir = sunDirection.clone().normalize();
   return sky;
 }

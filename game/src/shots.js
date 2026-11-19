@@ -1,5 +1,7 @@
 // Deterministic URL modes used to capture real rendered frames of the running
-// simulation: ?shot=start|play|drive|wanted|end&seed=1337.
+// simulation: ?shot=start|play|drive|wanted|end&seed=1337. Weather is pinned to
+// golden hour by main.js in shot mode, and every scripted action reads the same
+// virtual input path a real player uses.
 import * as THREE from 'three';
 import { VEHICLE_TYPES } from './config.js';
 import { randRange } from './rng.js';

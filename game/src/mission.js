@@ -1,7 +1,13 @@
-// Story jobs and their world markers. Steps are data-driven in config.js:
-// travel, pick up a case, steal a named car, deliver, get paid.
+// Story jobs, side jobs and their world markers. Steps are data-driven in
+// config.js: travel, pickups, vehicle theft, chase, escort, timed runs and
+// shootouts. Rewards are paid once per id, and a failed job retries from the
+// checkpoint captured at the start of the current step.
 import * as THREE from 'three';
-import { MISSIONS, STORY, CITY } from './config.js';
+import { MISSIONS, JOBS, VEHICLE_TYPES, STORY, CITY } from './config.js';
+import { applyReward, nextMissionIndex } from './rewards.js';
+import { Vehicle } from './vehicles.js';
+
+const ALL_JOBS = MISSIONS.concat(JOBS);
 
 export class MissionSystem {
   constructor(scene, sound) {
@@ -12,7 +18,13 @@ export class MissionSystem {
     this.completed = [];
     this.active = false;
     this.pendingNext = false;
+    this.finishing = false;
     this.t = 0;
+    this.timeLeft = 0;
+    this.checkpoint = null;
+    this.chaseTarget = null;
+    this.escortVehicle = null;
+    this.hostiles = [];
     this.marker = this.makeMarker();
     scene.add(this.marker);
   }
@@ -39,32 +51,54 @@ export class MissionSystem {
     return group;
   }
 
-  get mission() { return MISSIONS[this.index] || null; }
+  get mission() { return ALL_JOBS[this.index] || null; }
   get currentStep() { return this.mission ? this.mission.steps[this.step] : null; }
   get title() { return this.mission ? this.mission.name : 'FREE ROAM'; }
   get objective() {
     const s = this.currentStep;
     return s ? s.text : 'Explore Vesper Bay. Steal a car. Cause a scene.';
   }
+  get isSideJob() { return this.index >= MISSIONS.length; }
 
   getTarget() {
     const s = this.currentStep;
-    if (!s || !s.point) return null;
-    return { x: s.point[0], z: s.point[1], radius: s.radius || 12 };
+    if (!s) return null;
+    if (s.point) return { x: s.point[0], z: s.point[1], radius: s.radius || 12 };
+    if (s.x !== undefined && s.z !== undefined) return { x: s.x, z: s.z, radius: 14 };
+    return null;
   }
 
   setProgress(index, step, completed) {
-    this.index = Math.max(0, Math.min(MISSIONS.length, index | 0));
+    this.index = Math.max(0, Math.min(ALL_JOBS.length - 1, index | 0));
     this.step = Math.max(0, step | 0);
-    this.completed = Array.isArray(completed) ? completed.slice() : [];
-    this.active = this.index < MISSIONS.length;
+    this.completed = Array.isArray(completed) ? completed.filter((id) => typeof id === 'string') : [];
+    this.active = this.index < ALL_JOBS.length;
     this.pendingNext = false;
+    this.finishing = false;
+    this.clearEntities();
+    if (this.game) this.game.lastStolenName = '';
   }
 
   start(index = 0) {
-    this.setProgress(index, 0, []);
+    this.setProgress(index, 0, this.completed);
     this.active = true;
+    if (this.game) this.game.lastStolenName = '';
+    this.saveCheckpoint(this.game);
+    this.setupStep(this.game);
     if (this.mission) this.pushToast(`NEW JOB · ${this.mission.name}`, this.mission.brief);
+  }
+
+  // Pressing E at Oro's marker begins the next job the player has not cleared.
+  startNextAvailable() {
+    const next = ALL_JOBS.findIndex((m) => !this.completed.includes(m.id));
+    this.start(next === -1 ? 0 : next);
+  }
+
+  clearEntities() {
+    if (this.chaseTarget) { this.chaseTarget.dead = true; this.chaseTarget.entity.removeFrom(this.scene); this.chaseTarget = null; }
+    if (this.escortVehicle) { this.escortVehicle.removeFrom(this.scene); this.escortVehicle = null; }
+    for (const u of this.hostiles) { u.dead = true; u.entity.removeFrom(this.scene); }
+    this.hostiles.length = 0;
   }
 
   pushToast(title, body) {
@@ -73,44 +107,153 @@ export class MissionSystem {
 
   attach(game) { this.game = game; }
 
-  advance() {
-    this.step++;
+  saveCheckpoint(game) {
+    if (!game) return;
+    const p = game.player;
+    this.checkpoint = {
+      step: this.step,
+      cash: p.cash, respect: p.respect,
+      x: p.inVehicle ? p.inVehicle.x : p.x,
+      z: p.inVehicle ? p.inVehicle.z : p.z,
+    };
+  }
+
+  setupStep(game) {
+    if (!game) return;
     const s = this.currentStep;
-    if (s) this.pushToast('OBJECTIVE', s.text);
-    if (s && s.type === 'goto' && this.mission.ambushAtStep === this.step - 1) {
-      // Ambush is fired when the case is actually grabbed (see pickup below).
+    if (!s) return;
+    this.timeLeft = s.type === 'timedGoto' ? s.time : 0;
+    const px = game.player.x, pz = game.player.z;
+    if (s.type === 'chase' && !this.chaseTarget) {
+      const unit = game.police.spawnCar(s.x, s.z, 'rival', s.heading || 0);
+      unit.flee = true; unit.retreat = -999;
+      this.chaseTarget = unit;
+      this.pushToast('TARGET SPOTTED', 'The courier is armed. Ram him until his car dies.');
+    } else if (s.type === 'escortPickup' && !this.escortVehicle) {
+      const def = VEHICLE_TYPES.find((d) => d.name === 'SOL VAN');
+      const v = new Vehicle(def, 0xe8b23c, s.point[0], s.point[1], 0);
+      v.onDestroyed = () => this.onVehicleDestroyed(v, game);
+      this.scene.add(v.mesh);
+      this.escortVehicle = v;
+    } else if (s.type === 'shootout' && !this.hostiles.length) {
+      for (let i = 0; i < s.count; i++) {
+        const a = (i / s.count) * Math.PI * 2;
+        const u = game.police.spawnOfficer(s.point[0] + Math.cos(a) * 12, s.point[1] + Math.sin(a) * 12, 'rival');
+        u.retreat = -999;
+        this.hostiles.push(u);
+      }
     }
   }
 
+  advance() {
+    this.step++;
+    this.clearEntities();
+    const s = this.currentStep;
+    if (s) this.pushToast('OBJECTIVE', s.text);
+    this.saveCheckpoint(this.game);
+    this.setupStep(this.game);
+  }
+
   finish(game) {
+    if (this.finishing || !this.active) return;
     const mission = this.mission;
-    const reward = mission.steps[mission.steps.length - 1].reward || 0;
-    game.player.cash += reward;
-    game.player.respect += 1;
-    if (!this.completed.includes(mission.id)) this.completed.push(mission.id);
+    if (!mission) return;
+    this.finishing = true;
+    const step = mission.steps[mission.steps.length - 1];
+    const reward = step?.reward || 0;
+    // Idempotent: a second finish() for the same id pays nothing.
+    const rewardState = { completed: this.completed, cash: game.player.cash, respect: game.player.respect };
+    applyReward(rewardState, mission.id, reward);
+    game.player.cash = rewardState.cash;
+    game.player.respect = rewardState.respect;
+    this.completed = rewardState.completed;
     this.sound.mission();
     this.active = false;
     this.marker.visible = false;
-    this.pendingNext = this.index + 1 < MISSIONS.length;
-    game.save();
-    game.showResult(
-      'JOB REPORT',
-      'MISSION COMPLETE',
+    this.clearEntities();
+    this.pendingNext = nextMissionIndex(this.index, ALL_JOBS.length) >= 0;
+    game.showResult('JOB REPORT', 'MISSION COMPLETE',
       this.pendingNext
         ? `The ${STORY.gang} never saw it coming. Oro has another proposition for you.`
-        : `Vex is clear. The whole bay knows her name now. Story jobs complete.`,
+        : `Vex is clear. The whole bay knows her name now. Every job is done.`,
       `+ $${reward.toLocaleString()}   ·   +1 RESPECT`,
-      this.pendingNext ? 'NEXT JOB' : 'FREE ROAM',
-    );
+      this.pendingNext ? 'NEXT JOB' : 'FREE ROAM', false, () => {
+        this.afterResult();
+        // Persist the reward and the next-job progress after the result closes.
+        game.save();
+        game.mode = 'playing';
+      });
   }
 
   afterResult() {
     if (this.pendingNext) {
-      this.index++;
+      const next = nextMissionIndex(this.index, ALL_JOBS.length);
+      this.index = next;
       this.step = 0;
       this.active = true;
       this.pendingNext = false;
+      this.finishing = false;
+      this.game.lastStolenName = '';
+      this.saveCheckpoint(this.game);
+      this.setupStep(this.game);
       this.pushToast('NEW JOB · ' + this.mission.name, this.mission.brief);
+    } else {
+      this.finishing = false;
+    }
+  }
+
+  // --- fail states ------------------------------------------------------------
+  fail(reason, game, detail = '') {
+    if (!this.active) return;
+    this.active = false;
+    this.marker.visible = false;
+    this.clearEntities();
+    this.sound.busted();
+    game.showResult('JOB FAILED', reason,
+      detail || 'The job fell apart. Oro says you get one more shot at it.',
+      'CHECKPOINT RETRY', 'RETRY JOB', true, () => {
+        this.retry(game);
+        game.mode = 'playing';
+      });
+  }
+
+  retry(game) {
+    const cp = this.checkpoint;
+    game.player.cash = cp ? cp.cash : game.player.cash;
+    game.player.respect = cp ? cp.respect : game.player.respect;
+    game.player.health = 100;
+    game.player.armor = 0;
+    game.player.dead = false;
+    if (game.player.inVehicle) game.player.exitVehicle();
+    game.player.respawn(cp ? cp.x : -88, cp ? cp.z : 88);
+    game.police.clearAll();
+    game.wanted.setLevel(0);
+    if (game.input) game.input.releasePointerLock?.();
+    this.step = cp ? cp.step : 0;
+    this.active = true;
+    this.finishing = false;
+    game.lastStolenName = '';
+    this.saveCheckpoint(game);
+    this.setupStep(game);
+    this.pushToast('RETRY', this.objective);
+    game.save();
+  }
+
+  onPlayerDeath(game) {
+    const reason = this.mission?.id === 'cold-delivery' || this.mission?.id === 'last-call'
+      ? 'PACKAGE LOST' : 'WASTED';
+    this.fail(reason, game, 'Vex woke up in a alley with the job in ruins. Try the checkpoint again.');
+  }
+
+  onVehicleDestroyed(vehicle, game) {
+    if (!this.active) return;
+    const step = this.currentStep;
+    if (vehicle === this.escortVehicle) {
+      this.fail('CONVOY LOST', game, 'The van went up in smoke. Oro is not amused.');
+    } else if (this.mission?.id === 'hot-wheels' && (step?.type === 'stealVehicle' || step?.requiresVehicle)) {
+      this.fail('CAR DESTROYED', game, 'The Vulcan is scrap now. Steal another one.');
+    } else if (this.chaseTarget && vehicle === this.chaseTarget.entity) {
+      this.advance();
     }
   }
 
@@ -132,8 +275,47 @@ export class MissionSystem {
     const px = player.inVehicle ? player.inVehicle.x : player.x;
     const pz = player.inVehicle ? player.inVehicle.z : player.z;
 
-    if (step.type === 'goto') {
-      if (Math.hypot(px - step.point[0], pz - step.point[1]) < step.radius) {
+    if (step.type === 'timedGoto') {
+      this.timeLeft -= dt;
+      if (this.timeLeft <= 0) {
+        this.fail('TIME UP', game, 'The window closed. The package is cold.');
+        return;
+      }
+    }
+    if (step.type === 'chase' && this.chaseTarget) {
+      const e = this.chaseTarget.entity;
+      if (e.disabled || e.down || e.health <= 0) { this.advance(); return; }
+    }
+    if (step.type === 'escort' && this.escortVehicle) {
+      const v = this.escortVehicle;
+      if (v.disabled) { this.fail('CONVOY LOST', game); return; }
+      const behind = { x: px - Math.sin(player.yaw || 0) * 8, z: pz - Math.cos(player.yaw || 0) * 8 };
+      const dx = behind.x - v.x, dz = behind.z - v.z;
+      const dist = Math.hypot(dx, dz);
+      const want = Math.atan2(dx, dz);
+      let diff = want - v.heading;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      v.update(dt, { throttle: dist > 9 ? 1 : 0, steer: Math.max(-1, Math.min(1, diff * 1.8)) }, game.city.colliders);
+    }
+    if (step.type === 'shootout') {
+      const alive = this.hostiles.filter((u) => !u.dead && !u.entity.down && !u.entity.dead);
+      if (alive.length === 0 && this.hostiles.length) { this.advance(); return; }
+    }
+
+    if (step.type === 'goto' || step.type === 'timedGoto' || step.type === 'escort') {
+      const point = step.point;
+      if (!point) return;
+      if (Math.hypot(px - point[0], pz - point[1]) < step.radius) {
+        if (step.requiresVehicle && !(player.inVehicle && player.inVehicle.def.name === step.requiresVehicle)) {
+          if (!this._vehicleWarn || this.t - this._vehicleWarn > 3) {
+            this._vehicleWarn = this.t;
+            this.pushToast('WRONG RIDE', `You must be driving the ${step.requiresVehicle}.`);
+          }
+          return;
+        }
+        if (step.type === 'escort' && this.escortVehicle &&
+            Math.hypot(this.escortVehicle.x - point[0], this.escortVehicle.z - point[1]) > step.radius + 8) return;
         this.sound.pickup();
         this.advance();
       }
@@ -146,8 +328,14 @@ export class MissionSystem {
       this.sound.pickup();
       this.advance();
     } else if (step.type === 'stealVehicle') {
-      if (game.lastStolenName === step.vehicle || (player.inVehicle && player.inVehicle.def.name === step.vehicle)) {
+      if (player.inVehicle && player.inVehicle.def.name === step.vehicle) {
+        game.lastStolenName = step.vehicle;
         this.pushToast('NICE RIDE', 'Get it to the harbor chop shop before the heat finds you.');
+        this.advance();
+      }
+    } else if (step.type === 'escortPickup') {
+      if (Math.hypot(px - step.point[0], pz - step.point[1]) < step.radius) {
+        this.pushToast('CONVOY READY', 'Lead the van to the harbor. Keep it alive.');
         this.advance();
       }
     } else if (step.type === 'complete') {

@@ -26,8 +26,13 @@ const requiredGameFiles = [
   'index.html',
   'style.css',
   'src/main.js',
+  'src/save.js',
+  'src/mission.js',
+  'src/weather.js',
   'vendor/three.module.min.js',
 ];
+// Audit fix: the hand-in now refuses to omit the save, mission or weather
+// modules, so a half-written build can never pass this entrypoint check.
 
 function verifyGameFiles(root: string): void {
   for (const name of requiredGameFiles) {

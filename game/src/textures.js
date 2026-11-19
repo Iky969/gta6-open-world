@@ -1,5 +1,7 @@
 // Every texture in the game is painted into a canvas at boot: no image files,
 // no downloads, no font loads. Colour maps are tagged sRGB, data maps stay linear.
+// All randomness comes from the injected visual RNG stream so a seed reproduces
+// the same facades, asphalt and water in every browser and every capture.
 import * as THREE from 'three';
 import { chance, randRange } from './rng.js';
 
