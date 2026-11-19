@@ -37,6 +37,29 @@ function showWebGLFallback(reason) {
   if (detail && reason) detail.textContent += ` (${String(reason.message || reason).slice(0, 90)})`;
 }
 
+// Any boot failure that is NOT a WebGL context-creation failure surfaces the real
+// error instead of the misleading "NO WEBGL" screen.
+function showBootError(err) {
+  console.error(err);
+  const app = document.getElementById('app');
+  if (app) app.querySelectorAll('#hud, #title, #pause, #result').forEach((el) => el.classList.add('hidden'));
+  const overlay = document.createElement('div');
+  overlay.className = 'overlay';
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  const kicker = document.createElement('div');
+  kicker.className = 'modal-kicker';
+  kicker.textContent = 'BOOT ERROR';
+  const heading = document.createElement('h2');
+  heading.textContent = 'FAILED TO START';
+  const note = document.createElement('p');
+  note.className = 'modal-note';
+  note.textContent = String((err && err.message) || err);
+  modal.append(kicker, heading, note);
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
 function boot() {
   const params = new URLSearchParams(location.search);
   const seed = Number.parseInt(params.get('seed') || '1337', 10) || 1337;
@@ -56,7 +79,7 @@ function boot() {
   }
   let qualityCap = settings.quality === 'low' ? .7 : settings.quality === 'medium' ? 1 : 1.35;
   let adaptiveScale = 1;
-  renderer.setPixelRatio(useRetro ? 1 : Math.min(window.devicePixelRatio || 1, 1.35));
+  renderer.setPixelRatio(useRetro ? 1 : Math.min(window.devicePixelRatio || 1, qualityCap));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = settings.quality !== 'low';
   renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -150,6 +173,19 @@ function boot() {
   game.input = input;
   applySettings();
 
+  // Apply the current quality cap + adaptive scale. In retro mode the canvas
+  // stays at pixel ratio 1 and the low-res target is scaled instead; in
+  // ?retro=off mode the renderer pixel ratio is scaled directly. Shot mode never
+  // changes adaptiveScale, so captures stay deterministic.
+  function applyRenderScale() {
+    if (useRetro) {
+      renderer.setPixelRatio(1);
+      retro?.resize(window.innerWidth, window.innerHeight, adaptiveScale * (qualityCap / 1.35));
+    } else {
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityCap) * adaptiveScale);
+    }
+  }
+
   function applySettings() {
     sound.setVolume(settings.volume);
     sound.setStation(settings.station);
@@ -157,7 +193,7 @@ function boot() {
     input.setBindings(settings.bindings);
     qualityCap = settings.quality === 'low' ? .7 : settings.quality === 'medium' ? 1 : 1.35;
     renderer.shadowMap.enabled = settings.quality !== 'low';
-    renderer.setPixelRatio(useRetro ? 1 : Math.min(window.devicePixelRatio || 1, 1.35));
+    applyRenderScale();
     camera.fov = settings.fov;
     camera.updateProjectionMatrix();
     saveSettings(settings);
@@ -547,7 +583,7 @@ function boot() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-    retro?.resize(window.innerWidth, window.innerHeight);
+    applyRenderScale();
   });
 
   // --- main loop --------------------------------------------------------------
@@ -592,9 +628,10 @@ function boot() {
       fpsAccum += dt; fpsFrames++;
       if (fpsAccum > 1.6) {
         const fps = fpsFrames / fpsAccum;
+        const prev = adaptiveScale;
         if (fps < 45) adaptiveScale = Math.max(.6, adaptiveScale - .08);
         else if (fps > 57) adaptiveScale = Math.min(1, adaptiveScale + .05);
-        renderer.setPixelRatio(useRetro ? 1 : Math.min(window.devicePixelRatio || 1, 1.35));
+        if (adaptiveScale !== prev) applyRenderScale();
         fpsAccum = 0; fpsFrames = 0;
       }
     }
@@ -605,5 +642,5 @@ function boot() {
 try {
   boot();
 } catch (err) {
-  showWebGLFallback(err);
+  showBootError(err);
 }

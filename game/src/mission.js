@@ -9,6 +9,10 @@ import { Vehicle } from './vehicles.js';
 
 const ALL_JOBS = MISSIONS.concat(JOBS);
 
+// LAST CALL begins at a fixed curbside intersection with a car provided, so the
+// 52 s window is the same run no matter where the previous job ended.
+const LAST_CALL_START = { x: 88, z: -88 };
+
 export class MissionSystem {
   constructor(scene, sound) {
     this.scene = scene;
@@ -24,6 +28,7 @@ export class MissionSystem {
     this.checkpoint = null;
     this.chaseTarget = null;
     this.escortVehicle = null;
+    this.timedVehicle = null;
     this.hostiles = [];
     this.marker = this.makeMarker();
     scene.add(this.marker);
@@ -73,10 +78,16 @@ export class MissionSystem {
     this.step = Math.max(0, step | 0);
     this.completed = Array.isArray(completed) ? completed.filter((id) => typeof id === 'string') : [];
     this.active = this.index < ALL_JOBS.length;
+    // A save written on the 'complete' step of an already-paid job must not
+    // re-open the result screen (or pay again) when the player continues.
+    if (this.active && this.currentStep?.type === 'complete' && this.completed.includes(this.mission.id)) {
+      this.active = false;
+    }
     this.pendingNext = false;
     this.finishing = false;
     this.clearEntities();
     if (this.game) this.game.lastStolenName = '';
+    this.setupStep(this.game);
   }
 
   start(index = 0) {
@@ -84,7 +95,6 @@ export class MissionSystem {
     this.active = true;
     if (this.game) this.game.lastStolenName = '';
     this.saveCheckpoint(this.game);
-    this.setupStep(this.game);
     if (this.mission) this.pushToast(`NEW JOB · ${this.mission.name}`, this.mission.brief);
   }
 
@@ -97,6 +107,7 @@ export class MissionSystem {
   clearEntities() {
     if (this.chaseTarget) { this.chaseTarget.dead = true; this.chaseTarget.entity.removeFrom(this.scene); this.chaseTarget = null; }
     if (this.escortVehicle) { this.escortVehicle.removeFrom(this.scene); this.escortVehicle = null; }
+    if (this.timedVehicle) { this.timedVehicle.removeFrom(this.scene); this.timedVehicle = null; }
     for (const u of this.hostiles) { u.dead = true; u.entity.removeFrom(this.scene); }
     this.hostiles.length = 0;
   }
@@ -118,6 +129,15 @@ export class MissionSystem {
     };
   }
 
+  spawnVan(x, z, game) {
+    const def = VEHICLE_TYPES.find((d) => d.name === 'SOL VAN');
+    const v = new Vehicle(def, 0xe8b23c, x, z, 0);
+    v.onDestroyed = () => this.onVehicleDestroyed(v, game);
+    this.scene.add(v.mesh);
+    this.escortVehicle = v;
+    return v;
+  }
+
   setupStep(game) {
     if (!game) return;
     const s = this.currentStep;
@@ -130,11 +150,25 @@ export class MissionSystem {
       this.chaseTarget = unit;
       this.pushToast('TARGET SPOTTED', 'The courier is armed. Ram him until his car dies.');
     } else if (s.type === 'escortPickup' && !this.escortVehicle) {
-      const def = VEHICLE_TYPES.find((d) => d.name === 'SOL VAN');
-      const v = new Vehicle(def, 0xe8b23c, s.point[0], s.point[1], 0);
+      this.spawnVan(s.point[0], s.point[1], game);
+    } else if (s.type === 'escort' && !this.escortVehicle) {
+      // Retry/continue from the escort checkpoint: the van reappears beside the player.
+      this.spawnVan(px + 8, pz, game);
+    } else if (s.type === 'timedGoto') {
+      // Provide a car at a fixed curbside start, facing the drop-off, so the
+      // timed run is fair and identical wherever the previous job ended.
+      const p = game.player;
+      if (p.inVehicle) p.exitVehicle();
+      p.x = LAST_CALL_START.x; p.z = LAST_CALL_START.z;
+      p.mesh.position.set(p.x, 0, p.z);
+      if (this.timedVehicle) this.timedVehicle.removeFrom(this.scene);
+      const def = VEHICLE_TYPES.find((d) => d.name === 'NOVA COUPE');
+      const heading = Math.atan2(s.point[0] - p.x, s.point[1] - p.z);
+      const v = new Vehicle(def, 0xd7523f, p.x, p.z, heading);
       v.onDestroyed = () => this.onVehicleDestroyed(v, game);
       this.scene.add(v.mesh);
-      this.escortVehicle = v;
+      this.timedVehicle = v;
+      p.enterVehicle(v);
     } else if (s.type === 'shootout' && !this.hostiles.length) {
       for (let i = 0; i < s.count; i++) {
         const a = (i / s.count) * Math.PI * 2;
@@ -146,9 +180,17 @@ export class MissionSystem {
   }
 
   advance() {
+    const prev = this.currentStep;
     this.step++;
-    this.clearEntities();
     const s = this.currentStep;
+    // The convoy van carries over from the pickup into the escort step; hide it
+    // from clearEntities so its mesh survives. The timed-run car becomes the
+    // player's own once the delivery step is cleared, so release it untouched.
+    const van = s?.type === 'escort' ? this.escortVehicle : null;
+    this.escortVehicle = null;
+    if (prev?.type === 'timedGoto') this.timedVehicle = null;
+    this.clearEntities();
+    this.escortVehicle = van;
     if (s) this.pushToast('OBJECTIVE', s.text);
     this.saveCheckpoint(this.game);
     this.setupStep(this.game);
@@ -161,9 +203,9 @@ export class MissionSystem {
     this.finishing = true;
     const step = mission.steps[mission.steps.length - 1];
     const reward = step?.reward || 0;
-    // Idempotent: a second finish() for the same id pays nothing.
+    // Idempotent: a second finish() for the same id pays nothing and says so.
     const rewardState = { completed: this.completed, cash: game.player.cash, respect: game.player.respect };
-    applyReward(rewardState, mission.id, reward);
+    const { paid } = applyReward(rewardState, mission.id, reward);
     game.player.cash = rewardState.cash;
     game.player.respect = rewardState.respect;
     this.completed = rewardState.completed;
@@ -172,11 +214,13 @@ export class MissionSystem {
     this.marker.visible = false;
     this.clearEntities();
     this.pendingNext = nextMissionIndex(this.index, ALL_JOBS.length) >= 0;
-    game.showResult('JOB REPORT', 'MISSION COMPLETE',
-      this.pendingNext
-        ? `The ${STORY.gang} never saw it coming. Oro has another proposition for you.`
-        : `Vex is clear. The whole bay knows her name now. Every job is done.`,
-      `+ $${reward.toLocaleString()}   ·   +1 RESPECT`,
+    game.showResult('JOB REPORT', paid ? 'MISSION COMPLETE' : 'ALREADY COMPLETED',
+      paid
+        ? (this.pendingNext
+            ? `The ${STORY.gang} never saw it coming. Oro has another proposition for you.`
+            : `Vex is clear. The whole bay knows her name now. Every job is done.`)
+        : 'Oro already paid for this one. There is nothing left to collect.',
+      paid ? `+ $${reward.toLocaleString()}   ·   +1 RESPECT` : 'REWARD ALREADY PAID',
       this.pendingNext ? 'NEXT JOB' : 'FREE ROAM', false, () => {
         this.afterResult();
         // Persist the reward and the next-job progress after the result closes.
@@ -250,7 +294,8 @@ export class MissionSystem {
     const step = this.currentStep;
     if (vehicle === this.escortVehicle) {
       this.fail('CONVOY LOST', game, 'The van went up in smoke. Oro is not amused.');
-    } else if (this.mission?.id === 'hot-wheels' && (step?.type === 'stealVehicle' || step?.requiresVehicle)) {
+    } else if (this.mission?.id === 'hot-wheels' && vehicle.def.name === 'VULCAN GT' &&
+        (step?.type === 'stealVehicle' || step?.requiresVehicle)) {
       this.fail('CAR DESTROYED', game, 'The Vulcan is scrap now. Steal another one.');
     } else if (this.chaseTarget && vehicle === this.chaseTarget.entity) {
       this.advance();
@@ -289,7 +334,9 @@ export class MissionSystem {
     if (step.type === 'escort' && this.escortVehicle) {
       const v = this.escortVehicle;
       if (v.disabled) { this.fail('CONVOY LOST', game); return; }
-      const behind = { x: px - Math.sin(player.yaw || 0) * 8, z: pz - Math.cos(player.yaw || 0) * 8 };
+      // Follow behind the vehicle's actual heading, not the stale on-foot yaw.
+      const heading = player.inVehicle ? player.inVehicle.heading : (player.yaw || 0);
+      const behind = { x: px - Math.sin(heading) * 8, z: pz - Math.cos(heading) * 8 };
       const dx = behind.x - v.x, dz = behind.z - v.z;
       const dist = Math.hypot(dx, dz);
       const want = Math.atan2(dx, dz);
